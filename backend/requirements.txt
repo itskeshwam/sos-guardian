@@ -1,0 +1,7 @@
+# ----------------------------------------------------
+# File: backend/requirements.txt
+# Action: Create this file in the 'backend/' directory.
+# ----------------------------------------------------
+fastapi
+pydantic
+uvicorn[standard]

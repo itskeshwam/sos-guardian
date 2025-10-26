@@ -1,10 +1,17 @@
-// lib/main.dart
-
+// ----------------------------------------------------
+// File: mobile/lib/main.dart
+// Action: Replace the entire file content.
+// ----------------------------------------------------
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
+  // 1. Run Flutter Pub Get in your mobile/ directory after saving this file.
+  // 2. Set up and run your FastAPI backend server (Steps 5-7).
+  // 3. Run the Flutter app.
   runApp(const AiSosGuardianApp());
 }
 
@@ -26,23 +33,23 @@ class AiSosGuardianApp extends StatelessWidget {
 
 class SosScreen extends StatefulWidget {
   const SosScreen({super.key});
-
   @override
   State<SosScreen> createState() => _SosScreenState();
 }
 
 class _SosScreenState extends State<SosScreen> {
-  // Define a dummy contact number for MVP testing
-  final String trustedContactNumber = '+9199999XXXXX'; // Replace with a test number
+  // CONFIGURATION
+  // NOTE: For Android Emulator, 10.0.2.2 points to your host machine's localhost (FastAPI server).
+  final Uri sosInitUri = Uri.parse('http://10.0.2.2:8000/v1/sos/init');
+  final String trustedContactNumber = '+9199999XXXXX'; // **REPLACE WITH A REAL TEST NUMBER**
 
-  // 1. Function to check location permission and request if needed
+  // 1. Check permissions and get current location
   Future<Position?> _determinePosition() async {
     bool serviceEnabled;
     LocationPermission permission;
 
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      // Logic for disabled location service (prompt user to enable)
       return null;
     }
 
@@ -50,33 +57,53 @@ class _SosScreenState extends State<SosScreen> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        // Logic for permission denied
         return null;
       }
     }
     
     if (permission == LocationPermission.deniedForever) {
-      // Logic for permission permanently denied
       return null;
     }
 
-    // Get the current location
     return await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high);
   }
+  
+  // 2. Primary Method: POST encrypted data to FastAPI
+  Future<bool> _postEncryptedSos(Position position) async {
+    try {
+      // The payload simulates the encrypted data required by your spec
+      final encryptedPayload = {
+        'creator_device_id': 'device-uuid-mock-123',
+        'encrypted_session_blob': base64Encode(utf8.encode(
+            'SOS! Lat:${position.latitude}, Lon:${position.longitude}, Time:${DateTime.now()}')),
+      };
 
-  // 2. Function to launch the SMS/Messaging app
-  Future<void> _launchSms(Position position) async {
-    final lat = position.latitude;
-    final lon = position.longitude;
+      final response = await http.post(
+        sosInitUri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(encryptedPayload),
+      ).timeout(const Duration(seconds: 5)); 
 
-    // Create a Google Maps URL for the location
-    final mapsUrl = 'https://www.google.com/maps/search/?api=1&query=$lat,$lon';
+      // Check for a successful status code (200 or 201 created)
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return true; 
+      }
+      return false; 
+
+    } catch (e) {
+      // Connection error, timeout, or server unreachable
+      return false;
+    }
+  }
+
+  // 3. Fallback Method: Send SMS with Location Link
+  Future<void> _launchSmsFallback(Position position) async {
+    // Note: The actual URL in a real app would be a tiny service link that resolves to the live map.
+    final mapsUrl = 'https://maps.google.com/?q=$lat,$lon'; 
     
-    // Construct the SOS message
-    final messageBody = 'EMERGENCY SOS! I need help immediately. My live location: $mapsUrl';
+    final messageBody = 'EMERGENCY SOS! Primary system failed. Location: $mapsUrl';
 
-    // Create the SMS URI scheme
     final Uri smsUri = Uri(
       scheme: 'sms',
       path: trustedContactNumber,
@@ -85,25 +112,39 @@ class _SosScreenState extends State<SosScreen> {
 
     if (await canLaunchUrl(smsUri)) {
       await launchUrl(smsUri);
-    } else {
-      // Handle error: Could not launch SMS app
-      print('Could not launch $smsUri');
-    }
-  }
-
-  // 3. The main SOS function called by the button
-  void _triggerSos() async {
-    final position = await _determinePosition();
-    
-    if (position != null) {
-      await _launchSms(position);
-      // Optional: Show a confirmation message to the user
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('SOS message prepared. Please tap send in the messaging app.')),
+        const SnackBar(content: Text('API FAILED. Prepared SMS fallback. Tap send.')),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cannot get location. Check permissions and GPS.')),
+        const SnackBar(content: Text('CRITICAL FAILURE: Cannot launch SMS app.')),
+      );
+    }
+  }
+
+  // 4. Unified SOS Trigger
+  void _triggerSos() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Initiating SOS... Getting Location...')),
+      );
+
+    final position = await _determinePosition();
+    
+    if (position != null) {
+      // 1. Try primary (API) method
+      bool success = await _postEncryptedSos(position);
+
+      if (!success) {
+        // 2. Fallback to secondary (SMS) method
+        await _launchSmsFallback(position);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('SOS initiated via API. Notifications sent to contacts.')),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot get location. Check permissions/GPS.')),
       );
     }
   }
@@ -111,7 +152,7 @@ class _SosScreenState extends State<SosScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('AI SOS Guardian')),
+      appBar: AppBar(title: const Text('AI SOS Guardian MVP')),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
