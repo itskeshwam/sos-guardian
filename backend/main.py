@@ -1,7 +1,3 @@
-# ----------------------------------------------------
-# File: backend/main.py
-# Action: Confirm this exact code is in your file.
-# ----------------------------------------------------
 from fastapi import FastAPI, status
 from typing import Dict, Any
 import uvicorn

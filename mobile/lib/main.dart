@@ -1,7 +1,3 @@
-// ----------------------------------------------------
-// File: mobile/lib/main.dart
-// Action: Replace the entire file content with the corrected code.
-// ----------------------------------------------------
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';

@@ -1,7 +1,3 @@
-# ----------------------------------------------------
-# File: backend/schemas.py
-# Action: Create this file in the 'backend/' directory.
-# ----------------------------------------------------
 from pydantic import BaseModel, Field
 
 class SosInitRequest(BaseModel):
