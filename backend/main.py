@@ -1,13 +1,13 @@
 # ----------------------------------------------------
 # File: backend/main.py
-# Action: Create this file in the 'backend/' directory.
+# Action: Confirm this exact code is in your file.
 # ----------------------------------------------------
 from fastapi import FastAPI, status
 from typing import Dict, Any
 import uvicorn
 import time
-# Note: Assuming schemas.py is in the same directory for local import
-from . import schemas 
+# FIX: Direct import resolves "ImportError: attempted relative import" when running Uvicorn.
+import schemas 
 
 # Initialize the FastAPI app
 app = FastAPI(
