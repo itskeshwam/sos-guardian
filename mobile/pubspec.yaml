@@ -1,3 +1,7 @@
+# ----------------------------------------------------
+# File: mobile/pubspec.yaml
+# Action: Replace the entire file content.
+# ----------------------------------------------------
 name: mobile
 description: "A new Flutter project."
 publish_to: 'none'
@@ -13,10 +17,14 @@ dependencies:
 
   cupertino_icons: ^1.0.8
 
-  # MVP Dependencies
-  geolocator: ^14.0.2      # For GPS location
-  url_launcher: ^6.3.0    # For SMS fallback
-  http: ^1.2.1            # For API communication with FastAPI
+  # MVP Dependencies (Phase 1a)
+  geolocator: ^12.0.0
+  url_launcher: ^6.3.0
+  http: ^1.2.1
+
+  # Phase 1b: Security and Cryptography
+  cryptography: ^2.7.0         # For X25519 key generation
+  flutter_secure_storage: ^9.0.0 # For storing the private key securely
 
 dev_dependencies:
   flutter_test:
