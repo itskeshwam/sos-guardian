@@ -9,9 +9,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 
 void main() {
-  // 1. Run Flutter Pub Get in your mobile/ directory after saving this file.
-  // 2. Set up and run your FastAPI backend server (Steps 5-7).
-  // 3. Run the Flutter app.
   runApp(const AiSosGuardianApp());
 }
 
@@ -72,7 +69,6 @@ class _SosScreenState extends State<SosScreen> {
   // 2. Primary Method: POST encrypted data to FastAPI
   Future<bool> _postEncryptedSos(Position position) async {
     try {
-      // The payload simulates the encrypted data required by your spec
       final encryptedPayload = {
         'creator_device_id': 'device-uuid-mock-123',
         'encrypted_session_blob': base64Encode(utf8.encode(
@@ -85,21 +81,23 @@ class _SosScreenState extends State<SosScreen> {
         body: jsonEncode(encryptedPayload),
       ).timeout(const Duration(seconds: 5)); 
 
-      // Check for a successful status code (200 or 201 created)
       if (response.statusCode == 200 || response.statusCode == 201) {
         return true; 
       }
       return false; 
 
     } catch (e) {
-      // Connection error, timeout, or server unreachable
       return false;
     }
   }
 
   // 3. Fallback Method: Send SMS with Location Link
   Future<void> _launchSmsFallback(Position position) async {
-    // Note: The actual URL in a real app would be a tiny service link that resolves to the live map.
+    // FIX: Explicitly defining lat/lon for use in the message body
+    final lat = position.latitude;
+    final lon = position.longitude;
+
+    // Direct Google Maps URL using actual coordinates
     final mapsUrl = 'https://maps.google.com/?q=$lat,$lon'; 
     
     final messageBody = 'EMERGENCY SOS! Primary system failed. Location: $mapsUrl';
@@ -112,40 +110,53 @@ class _SosScreenState extends State<SosScreen> {
 
     if (await canLaunchUrl(smsUri)) {
       await launchUrl(smsUri);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('API FAILED. Prepared SMS fallback. Tap send.')),
-      );
+      // FIX: Added mounted check
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('API FAILED. Prepared SMS fallback. Tap send.')),
+        );
+      }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('CRITICAL FAILURE: Cannot launch SMS app.')),
-      );
+      // FIX: Added mounted check
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('CRITICAL FAILURE: Cannot launch SMS app.')),
+        );
+      }
     }
   }
 
   // 4. Unified SOS Trigger
   void _triggerSos() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Initiating SOS... Getting Location...')),
-      );
+    // FIX: Added mounted check before first ScaffoldMessenger call
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Initiating SOS... Getting Location...')),
+        );
+    }
 
     final position = await _determinePosition();
     
     if (position != null) {
-      // 1. Try primary (API) method
       bool success = await _postEncryptedSos(position);
 
       if (!success) {
-        // 2. Fallback to secondary (SMS) method
         await _launchSmsFallback(position);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('SOS initiated via API. Notifications sent to contacts.')),
-        );
+        // FIX: Added mounted check
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('SOS initiated via API. Notifications sent to contacts.')),
+          );
+        }
       }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cannot get location. Check permissions/GPS.')),
-      );
+      // FIX: Added mounted check
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cannot get location. Check permissions/GPS.')),
+        );
+      }
     }
   }
 
