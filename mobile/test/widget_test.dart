@@ -12,11 +12,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:mobile/main.dart'; // Ensure this line points to your main file
+import 'package:mobile/main.dart'; 
 
 void main() {
   testWidgets('SOS Guardian smoke test', (WidgetTester tester) async {
-    // Build our app using the correct class name.
+    // FIX: Use the correct class name for the root application widget.
     await tester.pumpWidget(const AiSosGuardianApp());
 
     // Verify the SOS text is present

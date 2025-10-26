@@ -1,6 +1,6 @@
 // ----------------------------------------------------
 // File: mobile/lib/main.dart
-// Action: Replace the entire file content.
+// Action: Replace the entire file content with the corrected code.
 // ----------------------------------------------------
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -93,14 +93,14 @@ class _SosScreenState extends State<SosScreen> {
 
   // 3. Fallback Method: Send SMS with Location Link
   Future<void> _launchSmsFallback(Position position) async {
-    // FIX: Explicitly defining lat/lon for use in the message body
+    // FIX: Variables lat and lon are correctly accessed from the position object.
     final lat = position.latitude;
     final lon = position.longitude;
 
-    // Direct Google Maps URL using actual coordinates
+    // Direct Google Maps URL to the location
     final mapsUrl = 'https://maps.google.com/?q=$lat,$lon'; 
     
-    final messageBody = 'EMERGENCY SOS! Primary system failed. Location: $mapsUrl';
+    final messageBody = 'EMERGENCY SOS! Primary system failed. Location: $mapsUrl (Coords: $lat, $lon)';
 
     final Uri smsUri = Uri(
       scheme: 'sms',
@@ -110,14 +110,13 @@ class _SosScreenState extends State<SosScreen> {
 
     if (await canLaunchUrl(smsUri)) {
       await launchUrl(smsUri);
-      // FIX: Added mounted check
-      if (mounted) {
+      // FIX: Use 'mounted' check before using context across async gaps.
+      if (mounted) { 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('API FAILED. Prepared SMS fallback. Tap send.')),
         );
       }
     } else {
-      // FIX: Added mounted check
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('CRITICAL FAILURE: Cannot launch SMS app.')),
@@ -128,7 +127,7 @@ class _SosScreenState extends State<SosScreen> {
 
   // 4. Unified SOS Trigger
   void _triggerSos() async {
-    // FIX: Added mounted check before first ScaffoldMessenger call
+    // FIX: Use 'mounted' check before using context across async gaps.
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Initiating SOS... Getting Location...')),
@@ -143,7 +142,6 @@ class _SosScreenState extends State<SosScreen> {
       if (!success) {
         await _launchSmsFallback(position);
       } else {
-        // FIX: Added mounted check
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('SOS initiated via API. Notifications sent to contacts.')),
@@ -151,7 +149,6 @@ class _SosScreenState extends State<SosScreen> {
         }
       }
     } else {
-      // FIX: Added mounted check
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Cannot get location. Check permissions/GPS.')),
