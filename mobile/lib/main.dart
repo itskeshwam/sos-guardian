@@ -11,7 +11,6 @@ class AiSosGuardianApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'AI SOS Guardian MVP',
       theme: ThemeData(primarySwatch: Colors.red),
       home: const SosScreen(),
     );
@@ -25,7 +24,6 @@ class SosScreen extends StatefulWidget {
 }
 
 class _SosScreenState extends State<SosScreen> {
-  // Use 10.0.2.2 for Android Emulator to hit localhost
   final Uri sosApiUri = Uri.parse('http://10.0.2.2:8000/v1/sos/init');
   final String trustedContactNumber = '+919999900000';
 
@@ -38,72 +36,38 @@ class _SosScreenState extends State<SosScreen> {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) return null;
     }
-
-    if (permission == LocationPermission.deniedForever) return null;
-
     return await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
   }
 
-  Future<void> _triggerSos() async {
-    _showSnackBar("Initiating SOS...");
+  Future<void> _onSosPressed() async {
+    final pos = await _getCurrentLocation();
+    if (pos == null) return;
 
-    final position = await _getCurrentLocation();
-    if (position == null) {
-      _showSnackBar("Location error. Check GPS permissions.");
-      return;
-    }
-
-    final success = await _sendApiAlert(position);
-    if (!success) {
-      await _triggerSmsFallback(position);
-    }
+    final success = await _sendApiAlert(pos);
+    if (!success) await _fallbackSms(pos);
   }
 
   Future<bool> _sendApiAlert(Position pos) async {
     try {
       final payload = {
-        'creator_device_id': 'device-uuid-mock-123',
-        'encrypted_session_blob': base64Encode(utf8.encode(
-            'LAT:${pos.latitude},LON:${pos.longitude},TS:${DateTime.now()}')),
+        'creator_device_id': 'mock-device-uuid',
+        'encrypted_session_blob': base64Encode(utf8.encode('LAT:${pos.latitude},LON:${pos.longitude}')),
       };
-
       final response = await http.post(
         sosApiUri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 201) {
-        _showSnackBar("SOS initiated via API.");
-        return true;
-      }
-    } catch (e) {
-      debugPrint("API Error: $e");
-    }
-    return false;
-  }
-
-  Future<void> _triggerSmsFallback(Position pos) async {
-    final googleMapsUrl = 'https://www.google.com/maps?q=${pos.latitude},${pos.longitude}';
-    final message = 'EMERGENCY! My location: $googleMapsUrl';
-
-    final Uri smsUri = Uri(
-      scheme: 'sms',
-      path: trustedContactNumber,
-      queryParameters: {'body': message},
-    );
-
-    if (await canLaunchUrl(smsUri)) {
-      await launchUrl(smsUri);
-      _showSnackBar("API failed. SMS fallback prepared.");
-    } else {
-      _showSnackBar("CRITICAL: SMS launch failed.");
+      return response.statusCode == 201;
+    } catch (_) {
+      return false;
     }
   }
 
-  void _showSnackBar(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  Future<void> _fallbackSms(Position pos) async {
+    final url = 'https://www.google.com/maps/search/?api=1&query=${pos.latitude},${pos.longitude}';
+    final Uri smsUri = Uri(scheme: 'sms', path: trustedContactNumber, queryParameters: {'body': 'SOS! My location: $url'});
+    if (await canLaunchUrl(smsUri)) await launchUrl(smsUri);
   }
 
   @override
@@ -112,18 +76,12 @@ class _SosScreenState extends State<SosScreen> {
       appBar: AppBar(title: const Text('AI SOS Guardian')),
       body: Center(
         child: GestureDetector(
-          onLongPress: _triggerSos,
+          onLongPress: _onSosPressed,
           child: Container(
-            width: 220,
-            height: 220,
-            decoration: const BoxDecoration(
-              color: Colors.red,
-              shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10, spreadRadius: 2)],
-            ),
+            width: 200, height: 200,
+            decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
             alignment: Alignment.center,
-            child: const Text('SOS',
-                style: TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.bold)),
+            child: const Text('SOS', style: TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold)),
           ),
         ),
       ),
