@@ -4,21 +4,15 @@ import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 
-void main() {
-  runApp(const AiSosGuardianApp());
-}
+void main() => runApp(const AiSosGuardianApp());
 
 class AiSosGuardianApp extends StatelessWidget {
   const AiSosGuardianApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'AI SOS Guardian MVP',
-      theme: ThemeData(
-        primarySwatch: Colors.red,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-      ),
+      theme: ThemeData(primarySwatch: Colors.red),
       home: const SosScreen(),
     );
   }
@@ -31,167 +25,106 @@ class SosScreen extends StatefulWidget {
 }
 
 class _SosScreenState extends State<SosScreen> {
-  // CONFIGURATION
-  // NOTE: For Android Emulator, 10.0.2.2 points to your host machine's localhost (FastAPI server).
-  final Uri sosInitUri = Uri.parse('http://10.0.2.2:8000/v1/sos/init');
-  final String trustedContactNumber = '+9199999XXXXX'; // **REPLACE WITH A REAL TEST NUMBER**
+  // Use 10.0.2.2 for Android Emulator to hit localhost
+  final Uri sosApiUri = Uri.parse('http://10.0.2.2:8000/v1/sos/init');
+  final String trustedContactNumber = '+919999900000';
 
-  // 1. Check permissions and get current location
-  Future<Position?> _determinePosition() async {
-    bool serviceEnabled;
-    LocationPermission permission;
+  Future<Position?> _getCurrentLocation() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return null;
 
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return null;
-    }
-
-    permission = await Geolocator.checkPermission();
+    LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return null;
-      }
-    }
-    
-    if (permission == LocationPermission.deniedForever) {
-      return null;
+      if (permission == LocationPermission.denied) return null;
     }
 
-    return await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high);
+    if (permission == LocationPermission.deniedForever) return null;
+
+    return await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
   }
-  
-  // 2. Primary Method: POST encrypted data to FastAPI
-  Future<bool> _postEncryptedSos(Position position) async {
+
+  Future<void> _triggerSos() async {
+    _showSnackBar("Initiating SOS...");
+
+    final position = await _getCurrentLocation();
+    if (position == null) {
+      _showSnackBar("Location error. Check GPS permissions.");
+      return;
+    }
+
+    final success = await _sendApiAlert(position);
+    if (!success) {
+      await _triggerSmsFallback(position);
+    }
+  }
+
+  Future<bool> _sendApiAlert(Position pos) async {
     try {
-      final encryptedPayload = {
+      final payload = {
         'creator_device_id': 'device-uuid-mock-123',
         'encrypted_session_blob': base64Encode(utf8.encode(
-            'SOS! Lat:${position.latitude}, Lon:${position.longitude}, Time:${DateTime.now()}')),
+            'LAT:${pos.latitude},LON:${pos.longitude},TS:${DateTime.now()}')),
       };
 
       final response = await http.post(
-        sosInitUri,
+        sosApiUri,
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(encryptedPayload),
-      ).timeout(const Duration(seconds: 5)); 
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 5));
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return true; 
+      if (response.statusCode == 201) {
+        _showSnackBar("SOS initiated via API.");
+        return true;
       }
-      return false; 
-
     } catch (e) {
-      return false;
+      debugPrint("API Error: $e");
     }
+    return false;
   }
 
-  // 3. Fallback Method: Send SMS with Location Link
-  Future<void> _launchSmsFallback(Position position) async {
-    // FIX: Variables lat and lon are correctly accessed from the position object.
-    final lat = position.latitude;
-    final lon = position.longitude;
-
-    // Direct Google Maps URL to the location
-    final mapsUrl = 'https://maps.google.com/?q=$lat,$lon'; 
-    
-    final messageBody = 'EMERGENCY SOS! Primary system failed. Location: $mapsUrl (Coords: $lat, $lon)';
+  Future<void> _triggerSmsFallback(Position pos) async {
+    final googleMapsUrl = 'https://www.google.com/maps?q=${pos.latitude},${pos.longitude}';
+    final message = 'EMERGENCY! My location: $googleMapsUrl';
 
     final Uri smsUri = Uri(
       scheme: 'sms',
       path: trustedContactNumber,
-      queryParameters: {'body': messageBody},
+      queryParameters: {'body': message},
     );
 
     if (await canLaunchUrl(smsUri)) {
       await launchUrl(smsUri);
-      // FIX: Use 'mounted' check before using context across async gaps.
-      if (mounted) { 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('API FAILED. Prepared SMS fallback. Tap send.')),
-        );
-      }
+      _showSnackBar("API failed. SMS fallback prepared.");
     } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('CRITICAL FAILURE: Cannot launch SMS app.')),
-        );
-      }
+      _showSnackBar("CRITICAL: SMS launch failed.");
     }
   }
 
-  // 4. Unified SOS Trigger
-  void _triggerSos() async {
-    // FIX: Use 'mounted' check before using context across async gaps.
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Initiating SOS... Getting Location...')),
-        );
-    }
-
-    final position = await _determinePosition();
-    
-    if (position != null) {
-      bool success = await _postEncryptedSos(position);
-
-      if (!success) {
-        await _launchSmsFallback(position);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('SOS initiated via API. Notifications sent to contacts.')),
-          );
-        }
-      }
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cannot get location. Check permissions/GPS.')),
-        );
-      }
-    }
+  void _showSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('AI SOS Guardian MVP')),
+      appBar: AppBar(title: const Text('AI SOS Guardian')),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'Press and hold the button for 3 seconds to trigger SOS.',
-              style: TextStyle(fontSize: 16),
-              textAlign: TextAlign.center,
+        child: GestureDetector(
+          onLongPress: _triggerSos,
+          child: Container(
+            width: 220,
+            height: 220,
+            decoration: const BoxDecoration(
+              color: Colors.red,
+              shape: BoxShape.circle,
+              boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10, spreadRadius: 2)],
             ),
-            const SizedBox(height: 50),
-            // The prominent SOS Button
-            GestureDetector(
-              onLongPress: _triggerSos,
-              child: Container(
-                width: 200,
-                height: 200,
-                decoration: const BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(color: Colors.redAccent, blurRadius: 15, spreadRadius: 3),
-                  ],
-                ),
-                alignment: Alignment.center,
-                child: const Text(
-                  'SOS',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ],
+            alignment: Alignment.center,
+            child: const Text('SOS',
+                style: TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.bold)),
+          ),
         ),
       ),
     );
