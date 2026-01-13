@@ -1,13 +1,12 @@
+# backend/database.py
 import os
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Default to local postgres if ENV not set
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost/sos_guardian")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
