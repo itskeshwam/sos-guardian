@@ -7,6 +7,7 @@ import uuid
 import schemas
 import models
 import database
+import base64
 
 # This command creates the tables (users, sos_signals) in Postgres if they don't exist
 models.Base.metadata.create_all(bind=database.engine)
@@ -60,7 +61,20 @@ async def post_sos_init(
 
     session_id = f"SOS-{uuid.uuid4().hex[:8]}"
 
-    # Save SOS event to DB
+    # 1. Decrypt/Decode the payload for the Console (Proof of Life)
+    try:
+        # In MVP, this is Base64. In Phase 2, this will be AES-GCM decryption.
+        decoded_bytes = base64.b64decode(request.encrypted_session_blob)
+        decoded_str = decoded_bytes.decode('utf-8')
+        print(f"\n🚨 [EMERGENCY ALERT] 🚨")
+        print(f"Session ID: {session_id}")
+        print(f"Device: {request.creator_device_id}")
+        print(f"Payload: {decoded_str}") # <--- THIS IS THE MAGIC LINE
+        print(f"Action: Dispatching Rescue Teams (Simulation)\n")
+    except Exception as e:
+        print(f"Error decoding payload: {e}")
+
+    # 2. Persist to DB
     new_signal = models.SosSignal(
         session_id=session_id,
         creator_device_id=request.creator_device_id,
