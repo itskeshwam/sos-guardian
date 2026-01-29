@@ -4,6 +4,9 @@ from sqlalchemy.orm import Session
 from typing import Dict, Any
 import uvicorn
 import uuid
+
+from sqlalchemy.sql.functions import session_user
+
 import schemas
 import models
 import database
