@@ -26,7 +26,7 @@ Future<void> initializeService() async {
     importance: Importance.high,
   );
 
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+  final flutterLocalNotificationsPlugin =
   FlutterLocalNotificationsPlugin();
 
   await flutterLocalNotificationsPlugin
@@ -60,7 +60,6 @@ Future<bool> onIosBackground(ServiceInstance service) async {
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
-
   final notifications = FlutterLocalNotificationsPlugin();
 
   PorcupineManager? porcupineManager;
@@ -73,7 +72,6 @@ void onStart(ServiceInstance service) async {
         _triggerSosLogic(service, notifications);
       },
     );
-
     await porcupineManager.start();
   } on PorcupineException catch (e) {
     service.invoke('update', {"error": e.toString()});
@@ -107,8 +105,8 @@ void onStart(ServiceInstance service) async {
 
 Future<void> _triggerSosLogic(
     ServiceInstance service,
-    FlutterLocalNotificationsPlugin notifications,
-    ) async {
+    FlutterLocalNotificationsPlugin notifications) async {
+
   const details = NotificationDetails(
     android: AndroidNotificationDetails(
       'sos_foreground',
@@ -118,15 +116,16 @@ Future<void> _triggerSosLogic(
     ),
   );
 
+  // ✅ FIXED
   await notifications.show(
     id: 999,
     title: "EMERGENCY TRIGGERED",
-    body: "Voice command detected! Sending help...",
+    body: "Voice command detected! Sending Help...",
     notificationDetails: details,
   );
 
   try {
-    final position = await Geolocator.getCurrentPosition(
+    Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high);
 
     final payloadPlain =
@@ -148,11 +147,11 @@ Future<void> _triggerSosLogic(
       await notifications.show(
         id: 1000,
         title: "SOS SENT",
-        body: "Authorities notified.",
+        body: "Authorities have been notified.",
         notificationDetails: details,
       );
     }
-  } catch (_) {
+  } catch (e) {
     await notifications.show(
       id: 1001,
       title: "SOS FAILED",
