@@ -7,18 +7,13 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
-// --- FIX: Added these imports ---
 import 'package:porcupine_flutter/porcupine.dart';
 import 'package:porcupine_flutter/porcupine_manager.dart';
 import 'package:porcupine_flutter/porcupine_error.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-// --- CONFIGURATION ---
-// CHANGE THIS to your PC's IP if using a real device (e.g., 'http://192.168.1.5:8000')
 const String backendUrl = 'http://10.0.2.2:8000';
-
-// PASTE YOUR KEY HERE
 const String accessKey = 'z6xIVP6LmdvZPj1Ze17bn7Tn3hLHgQWupTUuMc5bbsJnziF0z7UerA==';
 
 Future<void> initializeService() async {
@@ -35,7 +30,8 @@ Future<void> initializeService() async {
   FlutterLocalNotificationsPlugin();
 
   await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      .resolvePlatformSpecificImplementation<
+      AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(channel);
 
   await service.configure(
@@ -64,9 +60,9 @@ Future<bool> onIosBackground(ServiceInstance service) async {
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
+
   final notifications = FlutterLocalNotificationsPlugin();
 
-  // Initialize Porcupine
   PorcupineManager? porcupineManager;
 
   try {
@@ -74,23 +70,23 @@ void onStart(ServiceInstance service) async {
       accessKey,
       [BuiltInKeyword.PORCUPINE, BuiltInKeyword.BUMBLEBEE],
           (int keywordIndex) {
-        debugPrint("WAKE WORD DETECTED: Index $keywordIndex");
         _triggerSosLogic(service, notifications);
       },
     );
+
     await porcupineManager.start();
-    debugPrint("Voice Engine Started Successfully");
   } on PorcupineException catch (e) {
-    debugPrint("Porcupine Error: $e");
     service.invoke('update', {"error": e.toString()});
   }
 
   if (service is AndroidServiceInstance) {
-    service.on('setAsForeground').listen((event) => service.setAsForegroundService());
-    service.on('setAsBackground').listen((event) => service.setAsBackgroundService());
+    service.on('setAsForeground')
+        .listen((_) => service.setAsForegroundService());
+    service.on('setAsBackground')
+        .listen((_) => service.setAsBackgroundService());
   }
 
-  service.on('stopService').listen((event) async {
+  service.on('stopService').listen((_) async {
     await porcupineManager?.stop();
     await porcupineManager?.delete();
     service.stopSelf();
@@ -101,53 +97,67 @@ void onStart(ServiceInstance service) async {
       if (await service.isForegroundService()) {
         service.setForegroundNotificationInfo(
           title: "Guardian Ears Active",
-          content: "Safe Words Active. (${DateTime.now().minute}:${DateTime.now().second})",
+          content:
+          "Safe Words Active (${DateTime.now().minute}:${DateTime.now().second})",
         );
       }
     }
   });
 }
 
-Future<void> _triggerSosLogic(ServiceInstance service, FlutterLocalNotificationsPlugin notifications) async {
-  // 1. Show Local Alert
+Future<void> _triggerSosLogic(
+    ServiceInstance service,
+    FlutterLocalNotificationsPlugin notifications,
+    ) async {
+  const details = NotificationDetails(
+    android: AndroidNotificationDetails(
+      'sos_foreground',
+      'SOS Monitoring',
+      importance: Importance.high,
+      priority: Priority.high,
+    ),
+  );
+
   await notifications.show(
-      999,
-      "EMERGENCY TRIGGERED",
-      "Voice command detected! Sending Help...",
-      const NotificationDetails(android: AndroidNotificationDetails('sos_foreground', 'SOS Monitoring'))
+    id: 999,
+    title: "EMERGENCY TRIGGERED",
+    body: "Voice command detected! Sending help...",
+    notificationDetails: details,
   );
 
   try {
-    Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+    final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high);
 
-    final String payloadPlain = 'VOICE_ALERT_LAT:${position.latitude},LON:${position.longitude}';
-    final String encryptedBlob = base64Encode(utf8.encode(payloadPlain));
+    final payloadPlain =
+        'VOICE_ALERT_LAT:${position.latitude},LON:${position.longitude}';
+    final encryptedBlob = base64Encode(utf8.encode(payloadPlain));
 
-    final response = await http.post(
+    final response = await http
+        .post(
       Uri.parse('$backendUrl/v1/sos/init'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'creator_device_id': 'android_voice_bg',
         'encrypted_session_blob': encryptedBlob,
       }),
-    ).timeout(const Duration(seconds: 10));
+    )
+        .timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 201) {
       await notifications.show(
-          999,
-          "SOS SENT",
-          "Authorities have been notified.",
-          const NotificationDetails(android: AndroidNotificationDetails('sos_foreground', 'SOS Monitoring'))
+        id: 1000,
+        title: "SOS SENT",
+        body: "Authorities notified.",
+        notificationDetails: details,
       );
     }
-
-  } catch (e) {
-    debugPrint("Background SOS Failed: $e");
+  } catch (_) {
     await notifications.show(
-        999,
-        "SOS FAILED",
-        "Check internet connection.",
-        const NotificationDetails(android: AndroidNotificationDetails('sos_foreground', 'SOS Monitoring'))
+      id: 1001,
+      title: "SOS FAILED",
+      body: "Check internet connection.",
+      notificationDetails: details,
     );
   }
 }
