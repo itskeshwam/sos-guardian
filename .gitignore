@@ -1,0 +1,36 @@
+# --- General Bloat ---
+.DS_Store
+.history/
+*.log
+*.tmp
+
+# --- IDEs & Project Files ---
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.metadata
+**/__pycache__/
+**/*.py[cod]
+
+# --- Flutter / Mobile Global Rules ---
+# This catches the 'GeneratedPluginRegistrant' warnings you are seeing
+**/GeneratedPluginRegistrant.*
+**/generated_plugin_registrant.*
+**/generated_plugins.cmake
+
+# Ignore build and tool folders everywhere
+**/build/
+**/.dart_tool/
+**/.flutter-plugins*
+**/.pub-cache/
+**/.pub/
+
+# --- Platform Specifics ---
+**/android/.gradle/
+**/android/local.properties
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+**/venv/
+**/.env
