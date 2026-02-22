@@ -11,9 +11,9 @@ import uvicorn
 import uuid
 import base64
 
-from backend import schemas
-from backend import models
-from backend import database
+from . import schemas
+from . import models
+from . import database
 
 # Create tables in configured DB if they don't exist
 models.Base.metadata.create_all(bind=database.engine)
