@@ -1,4 +1,10 @@
 from fastapi import FastAPI, status, HTTPException, Depends
+import sys
+from pathlib import Path
+
+if __package__ is None or __package__ == "":
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
+
 from sqlalchemy.orm import Session
 from typing import Dict, Any
 import uvicorn
