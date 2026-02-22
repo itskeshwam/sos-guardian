@@ -1,9 +1,7 @@
-import java.util.Properties // Add this line at the top
-
 pluginManagement {
     val flutterSdkPath =
         run {
-            val properties = Properties() // Now this reference will be resolved
+            val properties = java.util.Properties() // Use fully qualified name here
             file("local.properties").inputStream().use { properties.load(it) }
             val flutterSdkPath = properties.getProperty("flutter.sdk")
             require(flutterSdkPath != null) { "flutter.sdk not set in local.properties" }
