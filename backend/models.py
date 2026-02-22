@@ -1,8 +1,8 @@
-# backend/models.py
 from sqlalchemy import Column, String, DateTime, Text
 from sqlalchemy.sql import func
-from database import Base
+from .database import Base
 import uuid
+
 
 class User(Base):
     __tablename__ = "users"
@@ -12,6 +12,7 @@ class User(Base):
     device_id = Column(String, nullable=False)
     identity_key_pub = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 
 class SosSignal(Base):
     __tablename__ = "sos_signals"
