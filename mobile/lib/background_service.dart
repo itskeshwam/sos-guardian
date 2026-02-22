@@ -3,14 +3,14 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_background_service_android/flutter_background_service_android.dart';
 
 Future<void> initializeService() async {
   final service = FlutterBackgroundService();
 
-  // Create the Notification Channel (Required for Android)
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'sos_foreground', // id
-    'SOS Monitoring', // title
+    'sos_foreground',
+    'SOS Monitoring',
     description: 'Keeps SOS Guardian active in background.',
     importance: Importance.high,
   );
@@ -19,14 +19,14 @@ Future<void> initializeService() async {
   FlutterLocalNotificationsPlugin();
 
   await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      .resolvePlatformSpecificImplementation<
+      AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(channel);
 
   await service.configure(
     androidConfiguration: AndroidConfiguration(
-      // This function runs in a separate Isolate
       onStart: onStart,
-      autoStart: false, // We will start it manually from the UI
+      autoStart: false,
       isForegroundMode: true,
       notificationChannelId: 'sos_foreground',
       initialNotificationTitle: 'SOS Guardian Active',
@@ -48,8 +48,10 @@ Future<bool> onIosBackground(ServiceInstance service) async {
 
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
-  // Ensure Dart bindings are ready
   DartPluginRegistrant.ensureInitialized();
+
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+  FlutterLocalNotificationsPlugin();
 
   if (service is AndroidServiceInstance) {
     service.on('setAsForeground').listen((event) {
@@ -65,23 +67,28 @@ void onStart(ServiceInstance service) async {
     service.stopSelf();
   });
 
-  // Heartbeat Loop: This proves the app is alive even when closed
   Timer.periodic(const Duration(seconds: 5), (timer) async {
     if (service is AndroidServiceInstance) {
       if (await service.isForegroundService()) {
-        service.setForegroundNotificationInfo(
-          title: "Guardian Active",
-          content: "Security Check: ${DateTime.now().hour}:${DateTime.now().minute}:${DateTime.now().second}",
+        flutterLocalNotificationsPlugin.show(
+          888,
+          'Guardian Active',
+          'Security Check: ${DateTime.now().hour}:${DateTime.now().minute}:${DateTime.now().second}',
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'sos_foreground',
+              'SOS Monitoring',
+              icon: 'ic_bg_service_small',
+              ongoing: true,
+            ),
+          ),
         );
       }
     }
 
-    // Send data back to the main UI if it's open
     service.invoke(
       'update',
       {"current_date": DateTime.now().toIso8601String()},
     );
-
-    debugPrint("Background Service Pulse: ${DateTime.now()}");
   });
 }

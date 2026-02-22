@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -6,12 +8,20 @@ import 'package:http/http.dart' as http;
 import 'package:cryptography/cryptography.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:permission_handler/permission_handler.dart'; // IMPORT THIS
+import 'package:permission_handler/permission_handler.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 import 'background_service.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // We initialize the service config, but we don't start it yet.
+
+  await [
+    Permission.notification,
+    Permission.location,
+    Permission.locationAlways,
+    Permission.ignoreBatteryOptimizations,
+  ].request();
+
   await initializeService();
   runApp(const AiSosGuardianApp());
 }
@@ -24,7 +34,6 @@ class AiSosGuardianApp extends StatelessWidget {
       title: 'AI SOS Guardian',
       theme: ThemeData(
         primarySwatch: Colors.red,
-        // Dark theme makes it look more "Guardian" like
         brightness: Brightness.dark,
         scaffoldBackgroundColor: Colors.grey[900],
       ),
@@ -47,27 +56,15 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
   bool _isRegistered = false;
   bool _isMonitoring = false;
   SimpleKeyPair? _identityKeyPair;
+  StreamSubscription? _accelerometerSubscription;
+  DateTime _lastShakeTime = DateTime.now();
+  final double _shakeThreshold = 15.0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _checkPermissions(); // <--- NEW: Request permissions on launch
     _initializeIdentity();
-  }
-
-  // 1. CRITICAL PERMISSION REQUEST
-  Future<void> _checkPermissions() async {
-    // Request Notification Permission (Required for Android 13+)
-    if (await Permission.notification.isDenied) {
-      await Permission.notification.request();
-    }
-
-    // Request Location Always (Required for Background SOS)
-    LocationPermission locationPermission = await Geolocator.checkPermission();
-    if (locationPermission == LocationPermission.denied) {
-      await Geolocator.requestPermission();
-    }
   }
 
   Future<void> _initializeIdentity() async {
@@ -121,17 +118,30 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
     }
   }
 
+  void _listenForShake() {
+    _accelerometerSubscription = accelerometerEventStream().listen((event) {
+      double acceleration = sqrt(event.x * event.x + event.y * event.y + event.z * event.z) - 9.81;
+      if (acceleration > _shakeThreshold) {
+        final now = DateTime.now();
+        if (now.difference(_lastShakeTime).inSeconds > 3) {
+          _lastShakeTime = now;
+          _onSosPressed();
+        }
+      }
+    });
+  }
+
   Future<void> _toggleMonitoring(bool value) async {
     final service = FlutterBackgroundService();
     if (value) {
-      // START SERVICE
       if (await service.startService()) {
         setState(() => _isMonitoring = true);
+        _listenForShake();
         _showSnackBar("Guardian Mode Activated");
       }
     } else {
-      // STOP SERVICE
       service.invoke("stopService");
+      _accelerometerSubscription?.cancel();
       setState(() => _isMonitoring = false);
       _showSnackBar("Guardian Mode Deactivated");
     }
@@ -159,7 +169,15 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
   Future<Position?> _getCurrentLocation() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return null;
-    return await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+
+    try {
+      return await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 5),
+      );
+    } catch (e) {
+      return await Geolocator.getLastKnownPosition();
+    }
   }
 
   Future<bool> _sendSecureApiAlert(Position pos) async {
@@ -182,7 +200,7 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
     final Uri smsUri = Uri(
       scheme: 'sms',
       path: trustedContactNumber,
-      queryParameters: {'body': 'SOS! I need help. My location is unknown.'},
+      queryParameters: {'body': 'SOS! I need help. My location is $reason.'},
     );
     if (await canLaunchUrl(smsUri)) await launchUrl(smsUri);
   }
@@ -190,6 +208,13 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
   void _showSnackBar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  void dispose() {
+    _accelerometerSubscription?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   @override
@@ -214,7 +239,6 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
               ),
             ),
             const SizedBox(height: 40),
-            // SWITCH
             Container(
               padding: const EdgeInsets.all(15),
               decoration: BoxDecoration(
