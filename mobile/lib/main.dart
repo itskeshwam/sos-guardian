@@ -1,6 +1,4 @@
-import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -9,19 +7,10 @@ import 'package:cryptography/cryptography.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:sensors_plus/sensors_plus.dart';
 import 'background_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  await [
-    Permission.notification,
-    Permission.location,
-    Permission.locationAlways,
-    Permission.ignoreBatteryOptimizations,
-  ].request();
-
   await initializeService();
   runApp(const AiSosGuardianApp());
 }
@@ -56,15 +45,22 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
   bool _isRegistered = false;
   bool _isMonitoring = false;
   SimpleKeyPair? _identityKeyPair;
-  StreamSubscription? _accelerometerSubscription;
-  DateTime _lastShakeTime = DateTime.now();
-  final double _shakeThreshold = 15.0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _checkPermissions();
     _initializeIdentity();
+  }
+
+  Future<void> _checkPermissions() async {
+    await [
+      Permission.notification,
+      Permission.location,
+      Permission.locationAlways,
+      Permission.ignoreBatteryOptimizations,
+    ].request();
   }
 
   Future<void> _initializeIdentity() async {
@@ -118,30 +114,15 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _listenForShake() {
-    _accelerometerSubscription = accelerometerEventStream().listen((event) {
-      double acceleration = sqrt(event.x * event.x + event.y * event.y + event.z * event.z) - 9.81;
-      if (acceleration > _shakeThreshold) {
-        final now = DateTime.now();
-        if (now.difference(_lastShakeTime).inSeconds > 3) {
-          _lastShakeTime = now;
-          _onSosPressed();
-        }
-      }
-    });
-  }
-
   Future<void> _toggleMonitoring(bool value) async {
     final service = FlutterBackgroundService();
     if (value) {
       if (await service.startService()) {
         setState(() => _isMonitoring = true);
-        _listenForShake();
         _showSnackBar("Guardian Mode Activated");
       }
     } else {
       service.invoke("stopService");
-      _accelerometerSubscription?.cancel();
       setState(() => _isMonitoring = false);
       _showSnackBar("Guardian Mode Deactivated");
     }
@@ -181,13 +162,20 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
   }
 
   Future<bool> _sendSecureApiAlert(Position pos) async {
+    final payload = jsonEncode({
+      "lat": pos.latitude,
+      "lon": pos.longitude,
+      "message": "Emergency! Immediate assistance required.",
+      "timestamp": DateTime.now().toIso8601String()
+    });
+
     try {
       final response = await http.post(
         Uri.parse('$backendUrl/v1/sos/init'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'creator_device_id': 'android_id',
-          'encrypted_session_blob': base64Encode(utf8.encode('LAT:${pos.latitude},LON:${pos.longitude}')),
+          'encrypted_session_blob': base64Encode(utf8.encode(payload)),
         }),
       ).timeout(const Duration(seconds: 5));
       return response.statusCode == 201;
@@ -200,7 +188,7 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
     final Uri smsUri = Uri(
       scheme: 'sms',
       path: trustedContactNumber,
-      queryParameters: {'body': 'SOS! I need help. My location is $reason.'},
+      queryParameters: {'body': 'SOS! I need help. System failed: $reason.'},
     );
     if (await canLaunchUrl(smsUri)) await launchUrl(smsUri);
   }
@@ -208,13 +196,6 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
   void _showSnackBar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  @override
-  void dispose() {
-    _accelerometerSubscription?.cancel();
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
   }
 
   @override

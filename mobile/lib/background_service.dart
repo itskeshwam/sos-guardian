@@ -12,7 +12,7 @@ Future<void> initializeService() async {
     'sos_foreground',
     'SOS Monitoring',
     description: 'Keeps SOS Guardian active in background.',
-    importance: Importance.high,
+    importance: Importance.low, // Set to low to minimize and silence the notification
   );
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -30,7 +30,7 @@ Future<void> initializeService() async {
       isForegroundMode: true,
       notificationChannelId: 'sos_foreground',
       initialNotificationTitle: 'SOS Guardian Active',
-      initialNotificationContent: 'Monitoring for safe words...',
+      initialNotificationContent: 'Monitoring system running silently...',
       foregroundServiceNotificationId: 888,
     ),
     iosConfiguration: IosConfiguration(
@@ -50,9 +50,6 @@ Future<bool> onIosBackground(ServiceInstance service) async {
 void onStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
 
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-  FlutterLocalNotificationsPlugin();
-
   if (service is AndroidServiceInstance) {
     service.on('setAsForeground').listen((event) {
       service.setAsForegroundService();
@@ -67,25 +64,8 @@ void onStart(ServiceInstance service) async {
     service.stopSelf();
   });
 
-  Timer.periodic(const Duration(seconds: 5), (timer) async {
-    if (service is AndroidServiceInstance) {
-      if (await service.isForegroundService()) {
-        flutterLocalNotificationsPlugin.show(
-          888,
-          'Guardian Active',
-          'Security Check: ${DateTime.now().hour}:${DateTime.now().minute}:${DateTime.now().second}',
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'sos_foreground',
-              'SOS Monitoring',
-              icon: 'ic_bg_service_small',
-              ongoing: true,
-            ),
-          ),
-        );
-      }
-    }
-
+  // Reduced heartbeat frequency and removed UI updates to prevent notification flashing
+  Timer.periodic(const Duration(minutes: 15), (timer) async {
     service.invoke(
       'update',
       {"current_date": DateTime.now().toIso8601String()},
