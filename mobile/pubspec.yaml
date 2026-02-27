@@ -15,7 +15,7 @@ dependencies:
   cupertino_icons: ^1.0.2
 
   # --- Phase 1: Communication ---
-  geolocator: ^11.0.0       # GPS Location access
+  geolocator: ^14.0.2       # GPS Location access
   url_launcher: ^6.2.5      # SMS Fallback triggering
   http: ^1.2.0              # REST API connectivity
 
