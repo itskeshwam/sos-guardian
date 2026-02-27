@@ -36,7 +36,7 @@ class SosScreen extends StatefulWidget {
   State<SosScreen> createState() => _SosScreenState();
 }
 
-class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
+class _SosScreenState extends State<SosScreen> {
   final String backendUrl = 'http://10.0.2.2:8000';
   final String trustedContactNumber = '+919999900000';
 
@@ -49,10 +49,8 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _checkPermissions();
     _initializeIdentity();
-    _initializeBackgroundService();
   }
 
   Future<void> _checkPermissions() async {
@@ -233,7 +231,7 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
                 decoration: BoxDecoration(
                   color: Colors.red[700],
                   shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: Colors.redAccent.withOpacity(0.4), blurRadius: 20, spreadRadius: 5)],
+                  boxShadow: [BoxShadow(color: Colors.redAccent.withValues(alpha: 0.4), blurRadius: 20, spreadRadius: 5)],
                 ),
                 alignment: Alignment.center,
                 child: const Text('SOS', style: TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.bold)),
