@@ -89,19 +89,22 @@ class _SosScreenState extends State<SosScreen> {
       final publicKey = await _identityKeyPair!.extractPublicKey();
       final String pubKeyString = base64UrlEncode(publicKey.bytes);
       final username = "user_${DateTime.now().millisecondsSinceEpoch}";
+      final deviceId = "android_id_${publicKey.bytes.first}";
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('device_id', deviceId);
 
       final response = await http.post(
         Uri.parse('$backendUrl/v1/register'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           "username": username,
-          "device_id": "android_id_${publicKey.bytes.first}",
+          "device_id": deviceId,
           "identity_key_pub": pubKeyString
         }),
       );
 
       if (response.statusCode == 201) {
-        final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('is_registered', true);
         setState(() {
           _isRegistered = true;
@@ -180,6 +183,9 @@ class _SosScreenState extends State<SosScreen> {
   }
 
   Future<bool> _sendSecureApiAlert(Position pos) async {
+    final prefs = await SharedPreferences.getInstance();
+    final deviceId = prefs.getString('device_id') ?? 'unknown_device';
+
     final payload = jsonEncode({
       "lat": pos.latitude,
       "lon": pos.longitude,
@@ -192,7 +198,7 @@ class _SosScreenState extends State<SosScreen> {
         Uri.parse('$backendUrl/v1/sos/init'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'creator_device_id': 'android_id',
+          'creator_device_id': deviceId,
           'encrypted_session_blob': base64Encode(utf8.encode(payload)),
         }),
       ).timeout(const Duration(seconds: 5));
