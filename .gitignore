@@ -11,6 +11,7 @@
 *.iws
 .vscode/
 .metadata
+!mobile/.metadata
 **/__pycache__/
 **/*.py[cod]
 

@@ -11,7 +11,6 @@ import 'background_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeService();
   runApp(const AiSosGuardianApp());
 }
 
@@ -45,6 +44,7 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
   bool _isRegistered = false;
   bool _isMonitoring = false;
   SimpleKeyPair? _identityKeyPair;
+  bool _backgroundServiceInitialized = false;
 
   @override
   void initState() {
@@ -52,6 +52,7 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _checkPermissions();
     _initializeIdentity();
+    _initializeBackgroundService();
   }
 
   Future<void> _checkPermissions() async {
@@ -114,7 +115,24 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
     }
   }
 
+
+  Future<void> _initializeBackgroundService() async {
+    if (_backgroundServiceInitialized) return;
+    try {
+      await initializeService();
+      _backgroundServiceInitialized = true;
+    } catch (e) {
+      setState(() => _statusMessage = "Background service init failed: $e");
+    }
+  }
+
   Future<void> _toggleMonitoring(bool value) async {
+    await _initializeBackgroundService();
+    if (!_backgroundServiceInitialized) {
+      _showSnackBar("Background service unavailable");
+      return;
+    }
+
     final service = FlutterBackgroundService();
     if (value) {
       if (await service.startService()) {
@@ -153,8 +171,10 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
 
     try {
       return await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 5),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 5),
+        ),
       );
     } catch (e) {
       return await Geolocator.getLastKnownPosition();
