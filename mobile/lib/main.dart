@@ -11,7 +11,6 @@ import 'background_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeService();
   runApp(const AiSosGuardianApp());
 }
 
@@ -37,7 +36,7 @@ class SosScreen extends StatefulWidget {
   State<SosScreen> createState() => _SosScreenState();
 }
 
-class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
+class _SosScreenState extends State<SosScreen> {
   final String backendUrl = 'http://10.0.2.2:8000';
   final String trustedContactNumber = '+919999900000';
 
@@ -45,11 +44,11 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
   bool _isRegistered = false;
   bool _isMonitoring = false;
   SimpleKeyPair? _identityKeyPair;
+  bool _backgroundServiceInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _checkPermissions();
     _initializeIdentity();
   }
@@ -117,7 +116,24 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
     }
   }
 
+
+  Future<void> _initializeBackgroundService() async {
+    if (_backgroundServiceInitialized) return;
+    try {
+      await initializeService();
+      _backgroundServiceInitialized = true;
+    } catch (e) {
+      setState(() => _statusMessage = "Background service init failed: $e");
+    }
+  }
+
   Future<void> _toggleMonitoring(bool value) async {
+    await _initializeBackgroundService();
+    if (!_backgroundServiceInitialized) {
+      _showSnackBar("Background service unavailable");
+      return;
+    }
+
     final service = FlutterBackgroundService();
     if (value) {
       if (await service.startService()) {
@@ -221,7 +237,7 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
                 decoration: BoxDecoration(
                   color: Colors.red[700],
                   shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: Colors.redAccent.withOpacity(0.4), blurRadius: 20, spreadRadius: 5)],
+                  boxShadow: [BoxShadow(color: Colors.redAccent.withValues(alpha: 0.4), blurRadius: 20, spreadRadius: 5)],
                 ),
                 alignment: Alignment.center,
                 child: const Text('SOS', style: TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.bold)),
