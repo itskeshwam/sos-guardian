@@ -153,8 +153,10 @@ class _SosScreenState extends State<SosScreen> with WidgetsBindingObserver {
 
     try {
       return await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 5),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 5),
+        ),
       );
     } catch (e) {
       return await Geolocator.getLastKnownPosition();
