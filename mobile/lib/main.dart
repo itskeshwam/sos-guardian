@@ -1,7 +1,5 @@
-// mobile/lib/main.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
@@ -56,14 +54,12 @@ class _SosScreenState extends State<SosScreen> {
   }
 
   Future<void> _checkPermissions() async {
-    if (!kIsWeb) {
-      await [
-        Permission.notification,
-        Permission.location,
-        Permission.locationAlways,
-        Permission.ignoreBatteryOptimizations,
-      ].request();
-    }
+    await [
+      Permission.notification,
+      Permission.location,
+      Permission.locationAlways,
+      Permission.ignoreBatteryOptimizations,
+    ].request();
   }
 
   Future<void> _initializeIdentity() async {
@@ -87,13 +83,17 @@ class _SosScreenState extends State<SosScreen> {
     }
   }
 
+  // Replace your existing _registerUser function with this:
   Future<void> _registerUser() async {
     if (_identityKeyPair == null) return;
     try {
       final publicKey = await _identityKeyPair!.extractPublicKey();
       final String pubKeyString = base64UrlEncode(publicKey.bytes);
       final username = "user_${DateTime.now().millisecondsSinceEpoch}";
-      final deviceId = "android_id_${publicKey.bytes.first}";
+
+      // FIX: Cryptographically link the Device ID to the public key to prevent DB collisions
+      final String rawId = base64UrlEncode(publicKey.bytes).replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+      final deviceId = "dev_$rawId";
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('device_id', deviceId);
@@ -131,11 +131,6 @@ class _SosScreenState extends State<SosScreen> {
   }
 
   Future<void> _toggleMonitoring(bool value) async {
-    if (kIsWeb) {
-      _showSnackBar("Guardian Mode requires native mobile app.");
-      return;
-    }
-
     await _initializeBackgroundService();
     if (!_backgroundServiceInitialized) {
       _showSnackBar("Background service unavailable");
@@ -160,6 +155,7 @@ class _SosScreenState extends State<SosScreen> {
     final pos = await _getCurrentLocation();
 
     if (pos == null) {
+      setState(() => _statusMessage = "GPS Failed. Fallback Triggered.");
       _triggerFallback("GPS Failed");
       return;
     }
@@ -168,6 +164,7 @@ class _SosScreenState extends State<SosScreen> {
     final success = await _sendSecureApiAlert(pos);
 
     if (!success) {
+      setState(() => _statusMessage = "API Unreachable. Fallback Triggered.");
       _triggerFallback("API Unreachable");
     } else {
       setState(() => _statusMessage = "SOS SENT SUCCESSFULLY");
@@ -176,24 +173,7 @@ class _SosScreenState extends State<SosScreen> {
 
   Future<Position?> _getCurrentLocation() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      _showSnackBar("Location services are disabled.");
-      return null;
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        _showSnackBar("Location permissions denied.");
-        return null;
-      }
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      _showSnackBar("Location permissions permanently denied.");
-      return null;
-    }
+    if (!serviceEnabled) return null;
 
     try {
       return await Geolocator.getCurrentPosition(
@@ -203,17 +183,26 @@ class _SosScreenState extends State<SosScreen> {
         ),
       );
     } catch (e) {
-      try {
-        return await Geolocator.getLastKnownPosition();
-      } catch (_) {
-        return null;
-      }
+      return await Geolocator.getLastKnownPosition();
     }
   }
 
   Future<bool> _sendSecureApiAlert(Position pos) async {
     final prefs = await SharedPreferences.getInstance();
     final deviceId = prefs.getString('device_id') ?? 'unknown_device';
+
+    String? serverKeyStr = prefs.getString('server_key_pub');
+    if (serverKeyStr == null) {
+      try {
+        final keyRes = await http.get(Uri.parse('$backendUrl/v1/server-key'));
+        if (keyRes.statusCode == 200) {
+          serverKeyStr = jsonDecode(keyRes.body)['server_key_pub'];
+          await prefs.setString('server_key_pub', serverKeyStr!);
+        } else {
+          return false;
+        }
+      } catch (_) { return false; }
+    }
 
     final payload = jsonEncode({
       "lat": pos.latitude,
@@ -222,17 +211,42 @@ class _SosScreenState extends State<SosScreen> {
       "timestamp": DateTime.now().toIso8601String()
     });
 
+    final serverPubKeyBytes = base64Url.decode(serverKeyStr);
+    final remotePub = SimplePublicKey(serverPubKeyBytes, type: KeyPairType.x25519);
+
+    final ecdh = X25519();
+    final sharedSecret = await ecdh.sharedSecretKey(
+      keyPair: _identityKeyPair!,
+      remotePublicKey: remotePub,
+    );
+
+    final chacha = Chacha20.poly1305Aead();
+    final sharedSecretBytes = await sharedSecret.extractBytes();
+    final secretBox = await chacha.encrypt(
+      utf8.encode(payload),
+      secretKey: SecretKey(sharedSecretBytes),
+    );
+
+    final combined = <int>[
+      ...secretBox.nonce,
+      ...secretBox.cipherText,
+      ...secretBox.mac.bytes,
+    ];
+
+    final String encryptedBlob = base64UrlEncode(combined);
+    print("\n[VERIFICATION] Raw Encrypted Payload Sent: ${encryptedBlob.substring(0, 60)}...\n");
+
     try {
       final response = await http.post(
         Uri.parse('$backendUrl/v1/sos/init'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'creator_device_id': deviceId,
-          'encrypted_session_blob': base64Encode(utf8.encode(payload)),
+          'encrypted_session_blob': encryptedBlob,
         }),
       ).timeout(const Duration(seconds: 5));
       return response.statusCode == 201;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
