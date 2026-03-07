@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
@@ -54,12 +55,14 @@ class _SosScreenState extends State<SosScreen> {
   }
 
   Future<void> _checkPermissions() async {
-    await [
-      Permission.notification,
-      Permission.location,
-      Permission.locationAlways,
-      Permission.ignoreBatteryOptimizations,
-    ].request();
+    if (!kIsWeb) {
+      await [
+        Permission.notification,
+        Permission.location,
+        Permission.locationAlways,
+        Permission.ignoreBatteryOptimizations,
+      ].request();
+    }
   }
 
   Future<void> _initializeIdentity() async {
@@ -116,7 +119,6 @@ class _SosScreenState extends State<SosScreen> {
     }
   }
 
-
   Future<void> _initializeBackgroundService() async {
     if (_backgroundServiceInitialized) return;
     try {
@@ -128,6 +130,11 @@ class _SosScreenState extends State<SosScreen> {
   }
 
   Future<void> _toggleMonitoring(bool value) async {
+    if (kIsWeb) {
+      _showSnackBar("Guardian Mode requires native mobile app.");
+      return;
+    }
+
     await _initializeBackgroundService();
     if (!_backgroundServiceInitialized) {
       _showSnackBar("Background service unavailable");

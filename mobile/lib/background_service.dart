@@ -11,7 +11,7 @@ Future<void> initializeService() async {
     'sos_foreground',
     'SOS Monitoring',
     description: 'Keeps SOS Guardian active in background.',
-    importance: Importance.low, // Set to low to minimize and silence the notification
+    importance: Importance.low,
   );
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -47,8 +47,6 @@ Future<bool> onIosBackground(ServiceInstance service) async {
 
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
-  DartPluginRegistrant.ensureInitialized();
-
   if (service is AndroidServiceInstance) {
     service.on('setAsForeground').listen((event) {
       service.setAsForegroundService();
@@ -63,7 +61,6 @@ void onStart(ServiceInstance service) async {
     service.stopSelf();
   });
 
-  // Reduced heartbeat frequency and removed UI updates to prevent notification flashing
   Timer.periodic(const Duration(minutes: 15), (timer) async {
     service.invoke(
       'update',
