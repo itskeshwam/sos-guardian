@@ -1,3 +1,5 @@
+// mobile/lib/main.dart
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -175,7 +177,24 @@ class _SosScreenState extends State<SosScreen> {
 
   Future<Position?> _getCurrentLocation() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return null;
+    if (!serviceEnabled) {
+      _showSnackBar("Location services are disabled.");
+      return null;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        _showSnackBar("Location permissions denied.");
+        return null;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      _showSnackBar("Location permissions permanently denied. Enable in settings.");
+      return null;
+    }
 
     try {
       return await Geolocator.getCurrentPosition(
@@ -185,7 +204,11 @@ class _SosScreenState extends State<SosScreen> {
         ),
       );
     } catch (e) {
-      return await Geolocator.getLastKnownPosition();
+      try {
+        return await Geolocator.getLastKnownPosition();
+      } catch (e2) {
+        return null;
+      }
     }
   }
 
@@ -234,48 +257,50 @@ class _SosScreenState extends State<SosScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('AI SOS Guardian'), backgroundColor: Colors.red[900]),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            GestureDetector(
-              onLongPress: _onSosPressed,
-              child: Container(
-                width: 220, height: 220,
-                decoration: BoxDecoration(
-                  color: Colors.red[700],
-                  shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: Colors.redAccent.withValues(alpha: 0.4), blurRadius: 20, spreadRadius: 5)],
-                ),
-                alignment: Alignment.center,
-                child: const Text('SOS', style: TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.bold)),
-              ),
-            ),
-            const SizedBox(height: 40),
-            Container(
-              padding: const EdgeInsets.all(15),
-              decoration: BoxDecoration(
-                  color: Colors.black45,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _isMonitoring ? Colors.green : Colors.grey)
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(_isMonitoring ? "Guardian Mode ON " : "Guardian Mode OFF",
-                      style: TextStyle(color: _isMonitoring ? Colors.greenAccent : Colors.grey, fontSize: 16)),
-                  const SizedBox(width: 10),
-                  Switch(
-                    value: _isMonitoring,
-                    onChanged: (val) => _toggleMonitoring(val),
-                    activeColor: Colors.greenAccent,
-                    inactiveTrackColor: Colors.grey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              GestureDetector(
+                onLongPress: _onSosPressed,
+                child: Container(
+                  width: 220, height: 220,
+                  decoration: BoxDecoration(
+                    color: Colors.red[700],
+                    shape: BoxShape.circle,
+                    boxShadow: [BoxShadow(color: Colors.redAccent.withValues(alpha: 0.4), blurRadius: 20, spreadRadius: 5)],
                   ),
-                ],
+                  alignment: Alignment.center,
+                  child: const Text('SOS', style: TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.bold)),
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            Text(_statusMessage, style: const TextStyle(color: Colors.white70)),
-          ],
+              const SizedBox(height: 40),
+              Container(
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                    color: Colors.black45,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _isMonitoring ? Colors.green : Colors.grey)
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_isMonitoring ? "Guardian Mode ON " : "Guardian Mode OFF",
+                        style: TextStyle(color: _isMonitoring ? Colors.greenAccent : Colors.grey, fontSize: 16)),
+                    const SizedBox(width: 10),
+                    Switch(
+                      value: _isMonitoring,
+                      onChanged: (val) => _toggleMonitoring(val),
+                      activeColor: Colors.greenAccent,
+                      inactiveTrackColor: Colors.grey,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(_statusMessage, style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+            ],
+          ),
         ),
       ),
     );
