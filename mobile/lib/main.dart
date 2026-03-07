@@ -1,5 +1,4 @@
 // mobile/lib/main.dart
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -192,7 +191,7 @@ class _SosScreenState extends State<SosScreen> {
     }
 
     if (permission == LocationPermission.deniedForever) {
-      _showSnackBar("Location permissions permanently denied. Enable in settings.");
+      _showSnackBar("Location permissions permanently denied.");
       return null;
     }
 
@@ -206,7 +205,7 @@ class _SosScreenState extends State<SosScreen> {
     } catch (e) {
       try {
         return await Geolocator.getLastKnownPosition();
-      } catch (e2) {
+      } catch (_) {
         return null;
       }
     }
@@ -298,7 +297,7 @@ class _SosScreenState extends State<SosScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              Text(_statusMessage, style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+              Text(_statusMessage, style: const TextStyle(color: Colors.white70)),
             ],
           ),
         ),

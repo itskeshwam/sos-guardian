@@ -1,8 +1,8 @@
 // mobile/lib/background_service.dart
-
 import 'dart:async';
 import 'dart:math';
 import 'dart:convert';
+import 'dart:ui';
 import 'package:http/http.dart' as http;
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -16,8 +16,8 @@ Future<void> initializeService() async {
 
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     'sos_foreground',
-    'SOS Guardian Active',
-    description: 'Monitoring telemetry for impact detection.',
+    'SOS Monitoring',
+    description: 'Keeps SOS Guardian active in background.',
     importance: Importance.low,
   );
 
@@ -35,8 +35,8 @@ Future<void> initializeService() async {
       autoStart: false,
       isForegroundMode: true,
       notificationChannelId: 'sos_foreground',
-      initialNotificationTitle: 'SOS Guardian',
-      initialNotificationContent: 'Automated threat detection active.',
+      initialNotificationTitle: 'SOS Guardian Active',
+      initialNotificationContent: 'Monitoring system running silently...',
       foregroundServiceNotificationId: 888,
     ),
     iosConfiguration: IosConfiguration(
@@ -55,11 +55,25 @@ Future<bool> onIosBackground(ServiceInstance service) async {
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
   if (service is AndroidServiceInstance) {
-    service.on('setAsForeground').listen((event) => service.setAsForegroundService());
-    service.on('setAsBackground').listen((event) => service.setAsBackgroundService());
+    service.on('setAsForeground').listen((event) {
+      service.setAsForegroundService();
+    });
+
+    service.on('setAsBackground').listen((event) {
+      service.setAsBackgroundService();
+    });
   }
 
-  service.on('stopService').listen((event) => service.stopSelf());
+  service.on('stopService').listen((event) {
+    service.stopSelf();
+  });
+
+  Timer.periodic(const Duration(minutes: 15), (timer) async {
+    service.invoke(
+      'update',
+      {"current_date": DateTime.now().toIso8601String()},
+    );
+  });
 
   const double crashThreshold = 10.5;
   const double spinThreshold = 3.0;
