@@ -1,0 +1,42 @@
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Flutter/Flutter.podspec
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.appframework
+ios/Flutter/App.framework
+ios/Flutter/flutter_assets/
+ios/ServiceDefinitions.json
+pubspec.lock
+
+# Android
+.gradle/
+local.properties
+*.keystore
+*.jks
+*.ap_
+*.apk
+*.aab
+
+# Python / Backend
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+*.db
+*.log
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
