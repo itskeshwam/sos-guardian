@@ -3,7 +3,7 @@
 class K {
   // ── Server ─────────────────────────────────────────────────────────────────
   // Change this to your PC's local IP or use 10.0.2.2 for Android Emulator.
-  static const String baseUrl = 'http://10.0.2.2:8000';
+  static const baseUrl = 'http://192.168.1.5:8000';
 
   // ── Guardian Mode ──────────────────────────────────────────────────────────
   static const int guardianIntervalMin   = 30;   // check-in every N minutes
