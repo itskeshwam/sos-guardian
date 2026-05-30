@@ -1,16 +1,18 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from sqlalchemy import Column, String, Float, Integer, BigInteger, Text, DateTime
 
 from database import Base
 
+# Define IST
+IST = timezone(timedelta(hours=5, minutes=30))
 
 def _uuid():
     return str(uuid.uuid4())
 
 
 def _now():
-    return datetime.now(timezone.utc)
+    return datetime.now(IST)
 
 
 def _session_id():

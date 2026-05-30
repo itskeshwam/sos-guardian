@@ -10,6 +10,7 @@ class RegisterRequest(BaseModel):
 
 class SosRequest(BaseModel):
     device_id:    str
+    session_id:   Optional[str] = None
     sos_type:     str = "manual"
     latitude:     float = 0.0
     longitude:    float = 0.0

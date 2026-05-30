@@ -6,13 +6,26 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/contact.dart';
 import '../models/sos_record.dart';
 import '../utils/constants.dart';
+import 'package:http_parser/http_parser.dart';
 
 class Api {
   static const _timeout = Duration(seconds: 15);
   static String get base => K.baseUrl;
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+  static Future<void> uploadEvidence(String sessionId, String filePath) async {
+    final request = http.MultipartRequest('POST', Uri.parse('$base/v1/upload_evidence/$sessionId'));
+    request.files.add(await http.MultipartFile.fromPath(
+      'file',
+      filePath,
+      contentType: MediaType('audio', 'm4a'),
+    ));
 
+    final response = await request.send();
+    if (response.statusCode != 200) {
+      throw Exception('Failed to upload evidence');
+    }
+  }
   static Future<Map<String, dynamic>> _post(
     String path,
     Map<String, dynamic> body,
@@ -74,6 +87,7 @@ class Api {
 
   static Future<Map<String, dynamic>> sendSos({
     required String deviceId,
+    String? sessionId,
     required String sosType,
     required double lat,
     required double lon,
@@ -82,6 +96,7 @@ class Api {
   }) =>
       _post('/v1/sos', {
         'device_id':    deviceId,
+        if (sessionId != null) 'session_id': sessionId,
         'sos_type':     sosType,
         'latitude':     lat,
         'longitude':    lon,

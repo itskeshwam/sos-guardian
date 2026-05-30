@@ -36,7 +36,15 @@ dependencies:
   sensors_plus: ^4.0.1
 
   # BLE relay
-  flutter_blue_plus: ^1.32.14
+  flutter_blue_plus: ^1.36.8
+
+  record: 5.1.0
+  path_provider: ^2.1.4
+  http_parser: ^4.0.1
+
+dependency_overrides:
+  record_linux: 0.7.2
+  record_platform_interface: 1.1.0
 
 dev_dependencies:
   flutter_test:

@@ -8,6 +8,7 @@ class SmsSvc {
     required double lon,
     required String sosType,
     required String username,
+    String? audioUrl,
   }) async {
     if (contacts.isEmpty) return;
 
@@ -19,8 +20,12 @@ class SmsSvc {
       'fall':     '🏔️ FALL DETECTED',
     };
     final label = labels[sosType] ?? '🆘 SOS';
-    final body  =
-        '$label\nUser: $username\nLocation: $mapsUrl\n— SOS Guardian App';
+    
+    String body = '$label\nUser: $username\nLocation: $mapsUrl';
+    if (audioUrl != null) {
+      body += '\nListen to recording: $audioUrl';
+    }
+    body += '\n— SOS Guardian App';
 
     for (final c in contacts) {
       final clean = c.phone.replaceAll(RegExp(r'[\s\-()]'), '');

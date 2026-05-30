@@ -1,11 +1,16 @@
 import os
 import time
 import asyncio
-from datetime import datetime, timezone
-from typing import Optional
+import shutil
+from datetime import datetime, timezone, timedelta
+from typing import Optional, List
+
+# Define IST
+IST = timezone(timedelta(hours=5, minutes=30))
 
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 import uvicorn
@@ -13,6 +18,10 @@ import uvicorn
 import models
 import schemas
 import database
+
+from fastapi import UploadFile, File
+
+
 
 load_dotenv()
 models.Base.metadata.create_all(bind=database.engine)
@@ -39,7 +48,8 @@ def build_message(
     lon: float,
     battery: Optional[int],
 ) -> str:
-    ts = datetime.now(timezone.utc).strftime("%d %b %Y %H:%M:%S UTC")
+    # Use IST for logging
+    ts = datetime.now(IST).strftime("%d %b %Y %H:%M:%S IST")
     maps_link = f"https://maps.google.com/?q={lat:.6f},{lon:.6f}"
 
     headlines = {
@@ -63,7 +73,27 @@ def build_message(
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
+UPLOAD_DIR = "emergency_recordings"
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
 
+# Serve the recordings folder at http://YOUR_IP:8000/recordings
+app.mount("/recordings", StaticFiles(directory=UPLOAD_DIR), name="recordings")
+
+@app.post("/v1/upload_evidence/{session_id}")
+async def upload_evidence(session_id: str, file: UploadFile = File(...)):
+    # Save file using the session_id as the name
+    filename = f"{session_id}.m4a"
+    file_path = os.path.join(UPLOAD_DIR, filename)
+
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        print(f"✅ [AUDIO STORED] {filename}")
+        return {"status": "success", "filename": filename}
+    except Exception as e:
+        print(f"❌ [UPLOAD ERROR] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 @app.get("/")
 def root():
     return {"status": "ok", "service": "SOS Guardian", "version": "3.0.0"}
@@ -73,14 +103,19 @@ def root():
 
 @app.post("/v1/register", status_code=status.HTTP_201_CREATED)
 def register(req: schemas.RegisterRequest, db: Session = Depends(database.get_db)):
+    # Check if user exists by device_id OR by username (since username is unique)
     existing = db.query(models.User).filter(
-        models.User.device_id == req.device_id
+        (models.User.device_id == req.device_id) | (models.User.username == req.username)
     ).first()
+
     if existing:
-        # Update username if changed
-        if existing.username != req.username:
-            existing.username = req.username
-            db.commit()
+        # Update existing user with new info (handles re-installs/re-registration)
+        existing.device_id = req.device_id
+        existing.username = req.username
+        existing.phone = req.phone
+        db.commit()
+        db.refresh(existing)
+        print(f"🔄 [USER UPDATED] {existing.username}")
         return {"user_id": existing.id, "status": "exists", "username": existing.username}
 
     user = models.User(
@@ -91,7 +126,12 @@ def register(req: schemas.RegisterRequest, db: Session = Depends(database.get_db
     db.add(user)
     db.commit()
     db.refresh(user)
-    print(f"[REGISTER] New user: {user.username} ({user.device_id[:8]}…)")
+    print("\n" + "👤" * 20)
+    print(f"NEW USER REGISTERED")
+    print(f"Username:  {user.username}")
+    print(f"Phone:     {user.phone}")
+    print(f"Device ID: {user.device_id}")
+    print("👤" * 20 + "\n")
     return {"user_id": user.id, "status": "created", "username": user.username}
 
 
@@ -111,6 +151,7 @@ def send_sos(req: schemas.SosRequest, db: Session = Depends(database.get_db)):
 
     event = models.SosEvent(
         device_id    = req.device_id,
+        session_id   = req.session_id or _session_id(),
         sos_type     = req.sos_type,
         latitude     = req.latitude,
         longitude    = req.longitude,
@@ -132,11 +173,17 @@ def send_sos(req: schemas.SosRequest, db: Session = Depends(database.get_db)):
     e2e_ms  = (t2 - req.t0_client_ms)        if req.t0_client_ms else None
     payload_bytes = len(message.encode("utf-8"))
 
-    print(
-        f"[{req.sos_type.upper()}] {event.session_id} | {user.username} | "
-        f"{req.latitude:.4f},{req.longitude:.4f} | "
-        f"Net={net_ms}ms Proc={proc_ms}ms E2E={e2e_ms}ms | {payload_bytes}B"
-    )
+    print("\n" + "🚨" * 15)
+    print(f"🚨🚨🚨 [ {req.sos_type.upper()} SOS ] 🚨🚨🚨")
+    print("-" * 40)
+    print(f"USER      : {user.username} ({user.phone or 'No Phone'})")
+    print(f"LOCATION  : {req.latitude}, {req.longitude}")
+    print(f"MAPS LINK : https://maps.google.com/?q={req.latitude},{req.longitude}")
+    print(f"BATTERY   : {req.battery}%")
+    print(f"SESSION   : {event.session_id}")
+    print("-" * 40)
+    print(f"LATENCY   : Net: {net_ms}ms | Proc: {proc_ms}ms | E2E: {e2e_ms}ms")
+    print("🚨" * 15 + "\n")
 
     return {
         "session_id": event.session_id,
